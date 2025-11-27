@@ -1,27 +1,17 @@
-/**
- * !!! FIX FOR 'fs' ERROR !!!
- * If you see "Cannot find module 'fs'", run this in your terminal:
- * npm install --save-dev @types/node
- * * OTHER PREREQUISITES:
- * npm install playwright
- * npx playwright install
- */
 import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
-import * as path from 'path'; // Added path module for safe file paths
+import * as path from 'path'; 
 import * as dotenv from 'dotenv';
 
-// Load environment variables
 dotenv.config();
 
-// Configure test to run with a visible browser
 test.use({ headless: false });
 
 // --- CONFIGURATION ---
 const ACCOUNT_ID = process.env.STEAM_ACCOUNT_ID;
 
 if (!ACCOUNT_ID) {
-    throw new Error("❌ CONFIGURATION ERROR: STEAM_ACCOUNT_ID is missing. Please create a .env file and set your Steam ID.");
+    throw new Error("CONFIGURATION ERROR: STEAM_ACCOUNT_ID is missing. Please create a .env file and set your Steam ID.");
 }
 
 const STEAM_PAGE = `https://steamcommunity.com/id/${ACCOUNT_ID}/games/?tab=all`;
@@ -173,8 +163,12 @@ test('Scrape Steam Games', async ({ page }) => {
     // 6. Write JSON
     console.log(`Extracted ${gamesData.length} items. Writing to JSON...`);
     
-    // Write using the new outputPath
     fs.writeFileSync(outputPath, JSON.stringify(gamesData, null, 2), { encoding: 'utf-8' });
-    
-    console.log(`Done! Saved to ${outputPath}. You can close this window.`);
+
+    // --- CLICKABLE PATH OUTPUT ---
+    const absoluteFolderPath = path.resolve(outputDir);
+    console.log(`\nDone! File saved to:`);
+    console.log(absoluteFolderPath);
+    console.log(`Filename: ${fileName}`);
+    console.log(`\nYou can close this window...`)
 });
