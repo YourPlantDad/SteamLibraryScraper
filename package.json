@@ -1,0 +1,27 @@
+{
+  "name": "steam-library-scraper",
+  "version": "1.0.0",
+  "description": "A tool to scrape Steam game library stats including playtime and achievements.",
+  "main": "index.js",
+  "scripts": {
+    "scrape": "npx playwright test steam-library-scraper.spec.ts",
+    "test": "npx playwright test"
+  },
+  "keywords": [
+    "steam",
+    "scraper",
+    "playwright",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.42.1",
+    "@types/node": "^20.11.24",
+    "playwright": "^1.42.1",
+    "typescript": "^5.3.3"
+  }
+}
