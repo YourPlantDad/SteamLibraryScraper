@@ -5,13 +5,12 @@ node_modules/
 test-results/
 playwright-report/
 
-# Environment variables (Contains your secrets!)
+# Environment variables
 .env
 
 # Output files
 *.json
 *.csv
 
-# Keep these config files
 !package.json
 !tsconfig.json
