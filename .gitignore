@@ -1,0 +1,17 @@
+# Dependency directories
+node_modules/
+
+# Playwright results
+test-results/
+playwright-report/
+
+# Environment variables (Contains your secrets!)
+.env
+
+# Output files
+*.json
+*.csv
+
+# Keep these config files
+!package.json
+!tsconfig.json
