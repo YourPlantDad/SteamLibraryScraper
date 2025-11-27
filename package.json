@@ -4,7 +4,7 @@
   "description": "A tool to scrape Steam game library stats including playtime and achievements.",
   "main": "index.js",
   "scripts": {
-    "scrape": "npx playwright test steam-library-scraper.spec.ts",
+    "scrape": "npx playwright test steam-library-scraper.spec.ts --reporter=./clean-reporter.ts",
     "test": "npx playwright test"
   },
   "keywords": [

@@ -176,5 +176,5 @@ test('Scrape Steam Games', async ({ page }) => {
     // Write using the new outputPath
     fs.writeFileSync(outputPath, JSON.stringify(gamesData, null, 2), { encoding: 'utf-8' });
     
-    console.log(`Done! Saved to ${outputPath}`);
+    console.log(`Done! Saved to ${outputPath}. You can close this window.`);
 });

@@ -41,7 +41,7 @@ Before you start, make sure you have **Node.js** installed on your computer.
 1. Go back to that Terminal/PowerShell window from Step 1.
 2. Type this command and press Enter:
     ```Bash
-    npm run scrape
+    npm run -s scrape
     ```
 
 ### Step 4: Login & Wait
