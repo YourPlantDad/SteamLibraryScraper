@@ -21,8 +21,10 @@ import * as fs from 'fs';
 import * as path from 'path'; 
 import * as dotenv from 'dotenv';
 
+// Load environment variables
 dotenv.config();
 
+// Configure test to run with a visible browser
 test.use({ headless: false });
 
 // --- CONFIGURATION ---
@@ -36,6 +38,7 @@ const STEAM_PAGE = `https://steamcommunity.com/id/${ACCOUNT_ID}/games/?tab=all`;
 
 interface GameData {
     name: string;
+    steamAppID: number;             // Extracted Steam App ID
     playtime: number | false;       // Hours (or false if 0)
     lastPlayed: number | false;     // Unix Timestamp (or false if never)
     myAchievements: number;
@@ -69,6 +72,10 @@ function getTimestamp(): string {
 
 test('Scrape Steam Games', async ({ page }) => {
     test.setTimeout(180000); // 3 minutes timeout
+
+    // --- LICENSE NOTICE (Terminal Interaction) ---
+    console.log(`\nSteam Library Scraper (GPLv3) - Copyright (C) 2025 Allard van der Willik - YourPlantDad`);
+    console.log(`This program comes with ABSOLUTELY NO WARRANTY.\n`);
 
     // --- FILE SETUP ---
     const outputDir = 'scrape_results';
@@ -118,6 +125,18 @@ test('Scrape Steam Games', async ({ page }) => {
                 return "N/A";
             };
 
+            const getAppId = (root: HTMLElement): number => {
+                const links = Array.from(root.querySelectorAll('a'));
+                const storeLink = links.find(a => a.href.includes('/app/'));
+                if (storeLink) {
+                    const match = storeLink.href.match(/\/app\/(\d+)/);
+                    if (match && match[1]) {
+                        return parseInt(match[1], 10);
+                    }
+                }
+                return 0;
+            };
+
             // Parse "1,003.9 hours" -> 1003.9
             const parsePlaytime = (str: string): number | false => {
                 if (!str || str === "N/A" || str === "0 hours") return false;
@@ -165,6 +184,8 @@ test('Scrape Steam Games', async ({ page }) => {
                 if (link && link.innerText) name = link.innerText;
             }
 
+            const steamAppID = getAppId(div);
+
             const rawPlaytime = findTextInRow(div, "TOTAL PLAYED");
             const playtime = parsePlaytime(rawPlaytime !== "N/A" ? cleanText(rawPlaytime, "TOTAL PLAYED") : "0 hours");
 
@@ -174,7 +195,14 @@ test('Scrape Steam Games', async ({ page }) => {
             const rawAch = findTextInRow(div, "ACHIEVEMENTS");
             const achievements = parseAchievements(rawAch !== "N/A" ? cleanText(rawAch, "ACHIEVEMENTS") : "N/A");
 
-            return { name, playtime, lastPlayed, myAchievements: achievements.my, totalAchievements: achievements.total };
+            return { 
+                name, 
+                steamAppID,
+                playtime, 
+                lastPlayed, 
+                myAchievements: achievements.my, 
+                totalAchievements: achievements.total 
+            };
         });
     });
 
