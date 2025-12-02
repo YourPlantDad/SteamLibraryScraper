@@ -1,53 +1,34 @@
 /*
     Steam Library Scraper
     Copyright (C) 2025 Allard van der Willik - YourPlantDad
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+    License: GPLv3
 */
 
 import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path'; 
-import * as dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
-
-// Configure test to run with a visible browser
 test.use({ headless: false });
 
-// --- CONFIGURATION ---
+// The ID is passed from the CLI process environment
 const ACCOUNT_ID = process.env.STEAM_ACCOUNT_ID;
 
 if (!ACCOUNT_ID) {
-    throw new Error("CONFIGURATION ERROR: STEAM_ACCOUNT_ID is missing. Please create a .env file and set your Steam ID.");
+    console.error(`\n❌ ERROR: STEAM_ACCOUNT_ID was not provided.`);
+    throw new Error("CONFIGURATION ERROR: STEAM_ACCOUNT_ID is missing.");
 }
 
 const STEAM_PAGE = `https://steamcommunity.com/id/${ACCOUNT_ID}/games/?tab=all`;
 
 interface GameData {
     name: string;
-    steamAppID: number;             // Extracted Steam App ID
-    playtime: number | false;       // Hours (or false if 0)
-    lastPlayed: number | false;     // Unix Timestamp (or false if never)
+    steamAppID: number;
+    playtime: number | false;
+    lastPlayed: number | false;
     myAchievements: number;
     totalAchievements: number;
 }
 
-/**
- * Helper: Scroll to bottom to trigger lazy loading
- */
 async function scrollPage(page: Page) {
     console.log("Scrolling to load all games...");
     for (let i = 0; i < 8; i++) { 
@@ -56,9 +37,6 @@ async function scrollPage(page: Page) {
     }
 }
 
-/**
- * Helper: Generate formatted timestamp (YYYY-MM-DD HHmm)
- */
 function getTimestamp(): string {
     const now = new Date();
     const year = now.getFullYear();
@@ -66,34 +44,30 @@ function getTimestamp(): string {
     const day = String(now.getDate()).padStart(2, '0');
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
-    
     return `${year}-${month}-${day} ${hours}${minutes}`;
 }
 
-test('Scrape Steam Games', async ({ page }) => {
-    test.setTimeout(180000); // 3 minutes timeout
+test('Scrape Steam Games', async ({ page }: { page: Page }) => {
+    test.setTimeout(180000); 
 
-    // --- LICENSE NOTICE (Terminal Interaction) ---
-    console.log(`\nSteam Library Scraper (GPLv3) - Copyright (C) 2025 Allard van der Willik - YourPlantDad`);
+    console.log(`\nSteam Library Scraper (GPLv3) - Copyright (C) 2025 Allard van der Willik`);
     console.log(`This program comes with ABSOLUTELY NO WARRANTY.\n`);
 
-    // --- FILE SETUP ---
-    const outputDir = 'scrape_results';
+    // --- OUTPUT PATH CONFIGURATION ---
+    // app/src -> app -> ROOT -> output -> raw_data
+    const outputDir = path.resolve(__dirname, '..', '..', 'output', 'raw_data');
     const timestamp = getTimestamp();
     const fileName = `SteamScrape_${ACCOUNT_ID}_${timestamp}.json`;
     const outputPath = path.join(outputDir, fileName);
 
-    // Ensure the directory exists
     if (!fs.existsSync(outputDir)){
         fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    // 1. Navigate
     console.log(`Targeting Steam Account: ${ACCOUNT_ID}`);
     console.log("Navigating...");
     await page.goto(STEAM_PAGE);
 
-    // 2. Wait for Login
     console.log("\nPlease log in! Waiting up to 45 seconds for the games list to appear...");
     try {
         await expect(page.getByText('All Games').first()).toBeVisible({ timeout: 45000 });
@@ -103,19 +77,15 @@ test('Scrape Steam Games', async ({ page }) => {
         return;
     }
 
-    // 3. Scroll
     await scrollPage(page);
 
-    // 4. Locate Games
     const specificGameRows = page.locator('div[role="button"]').filter({ has: page.locator('img') });
     const count = await specificGameRows.count();
     console.log(`\nFound ${count} games. Extracting data...`);
 
-    // 5. Bulk Extraction (Browser-Side)
     const gamesData: GameData[] = await specificGameRows.evaluateAll((gameDivs: HTMLElement[]) => {
         return gameDivs.map((div: HTMLElement) => {
             
-            // --- Helper Functions (Browser Context) ---
             const cleanText = (text: string, label: string) => text.replace(label, "").trim();
 
             const findTextInRow = (root: HTMLElement, searchText: string) => {
@@ -137,7 +107,6 @@ test('Scrape Steam Games', async ({ page }) => {
                 return 0;
             };
 
-            // Parse "1,003.9 hours" -> 1003.9
             const parsePlaytime = (str: string): number | false => {
                 if (!str || str === "N/A" || str === "0 hours") return false;
                 const cleanStr = str.replace(/,/g, '');
@@ -149,7 +118,6 @@ test('Scrape Steam Games', async ({ page }) => {
                 return Math.round(hours * 100) / 100;
             };
 
-            // Parse Date -> Unix Timestamp
             const parseLastPlayed = (str: string): number | false => {
                 if (!str || str === "Never" || str === "N/A") return false;
                 const now = new Date();
@@ -167,7 +135,6 @@ test('Scrape Steam Games', async ({ page }) => {
                 return Math.floor(date.getTime() / 1000);
             };
 
-            // Parse "637/641" -> {my, total}
             const parseAchievements = (str: string) => {
                 if (!str || str === "N/A") return { my: 0, total: 0 };
                 const parts = str.split('/');
@@ -175,7 +142,6 @@ test('Scrape Steam Games', async ({ page }) => {
                 return { my: 0, total: 0 };
             };
 
-            // --- Extraction ---
             let name = "N/A";
             const img = div.querySelector('img');
             if (img && img.alt) name = img.alt;
@@ -185,13 +151,10 @@ test('Scrape Steam Games', async ({ page }) => {
             }
 
             const steamAppID = getAppId(div);
-
             const rawPlaytime = findTextInRow(div, "TOTAL PLAYED");
             const playtime = parsePlaytime(rawPlaytime !== "N/A" ? cleanText(rawPlaytime, "TOTAL PLAYED") : "0 hours");
-
             const rawLastPlayed = findTextInRow(div, "LAST PLAYED");
             const lastPlayed = parseLastPlayed(rawLastPlayed !== "N/A" ? cleanText(rawLastPlayed, "LAST PLAYED") : "Never");
-
             const rawAch = findTextInRow(div, "ACHIEVEMENTS");
             const achievements = parseAchievements(rawAch !== "N/A" ? cleanText(rawAch, "ACHIEVEMENTS") : "N/A");
 
@@ -206,12 +169,10 @@ test('Scrape Steam Games', async ({ page }) => {
         });
     });
 
-    // 6. Write JSON
     console.log(`Extracted ${gamesData.length} items. Writing to JSON...`);
     
     fs.writeFileSync(outputPath, JSON.stringify(gamesData, null, 2), { encoding: 'utf-8' });
 
-    // --- CLICKABLE PATH OUTPUT ---
     const absoluteFolderPath = path.resolve(outputDir);
     console.log(`\nDone! File saved to:`);
     console.log(absoluteFolderPath);

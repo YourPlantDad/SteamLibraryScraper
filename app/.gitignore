@@ -1,7 +1,8 @@
 # Dependency directories
 node_modules/
 
-# Playwright results
+#Hidden cache
+.cache/
 test-results/
 playwright-report/
 
@@ -9,8 +10,12 @@ playwright-report/
 .env
 
 # Output files
+output/
+scrape_results/
+obsidian_export/
 *.json
 *.csv
 
 !package.json
 !tsconfig.json
+!playwright.config.ts
