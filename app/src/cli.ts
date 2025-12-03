@@ -35,7 +35,7 @@ function loadSettings(): Settings | null {
         try {
             return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
         } catch (e) {
-            console.error(`\n❌ ERROR reading settings file: ${SETTINGS_PATH}`);
+            console.error(`\nERROR reading settings file: ${SETTINGS_PATH}`);
             console.error(`   The JSON file may be corrupted.`);
             return null;
         }
@@ -45,7 +45,7 @@ function loadSettings(): Settings | null {
 
 function saveSettings(settings: Settings) {
     fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), 'utf-8');
-    console.log(`✅ Settings saved to ${SETTINGS_PATH}`);
+    console.log(`Settings saved to ${SETTINGS_PATH}`);
 }
 
 async function getSteamID(): Promise<string> {
@@ -59,12 +59,12 @@ async function getSteamID(): Promise<string> {
     }
 
     // Fallback if file is empty or missing
-    console.log('\n⚠️  Steam ID not found in settings.');
+    console.log('\nSteam ID not found in settings.');
     console.log('Please enter your Steam Custom URL ID.');
     const newID = await question('Steam ID: ');
     
     if (!newID.trim()) {
-        console.log("❌ ID cannot be empty.");
+        console.log("ID cannot be empty.");
         return getSteamID(); 
     }
 
@@ -73,7 +73,7 @@ async function getSteamID(): Promise<string> {
 }
 
 async function runScraper(accountID: string) {
-    console.log("\n🚀 Launching Scraper...");
+    console.log("\nLaunching Scraper...");
     
     return new Promise<void>((resolve, reject) => {
         const childEnv = { 
@@ -94,16 +94,16 @@ async function runScraper(accountID: string) {
 
         scrapeProcess.on('close', (code) => {
             if (code === 0) {
-                console.log("✅ Scraping complete.");
+                console.log("Scraping complete.");
                 resolve();
             } else {
-                console.error(`\n❌ SCRAPER FAILED with exit code ${code}.`);
+                console.error(`\nSCRAPER FAILED with exit code ${code}.`);
                 resolve(); 
             }
         });
 
         scrapeProcess.on('error', (err) => {
-            console.error(`\n❌ FAILED to start scraper process: ${err.message}`);
+            console.error(`\nFAILED to start scraper process: ${err.message}`);
             resolve();
         });
     });
@@ -114,7 +114,7 @@ async function runScraper(accountID: string) {
 async function main() {
     console.clear();
     console.log("========================================");
-    console.log("   🎮 STEAM LIBRARY SCRAPER & EXPORT    ");
+    console.log("     STEAM LIBRARY SCRAPER & EXPORT     ");
     console.log("========================================");
 
     // If for some reason settings are missing, get them once at startup
@@ -122,16 +122,16 @@ async function main() {
     if (!currentID) {
         currentID = await getSteamID();
     } else {
-        console.log(`\n👋 Welcome back, ${currentID}!`);
+        console.log(`\nWelcome back, ${currentID}!`);
     }
 
     while (true) {
         console.log("\nWhat would you like to do?");
-        console.log("1. 📥 Scrape my Steam library");
-        console.log("2. 📝 Generate Markdown files from previous scrape");
-        console.log("3. 🚀 Scrape and create Markdown files");
-        console.log("4. ⚙️ Change Steam ID");
-        console.log("5. ❌ Exit");
+        console.log("1. Scrape my Steam library");
+        console.log("2. Generate Markdown files from previous scrape");
+        console.log("3. Scrape and create Markdown files");
+        console.log("4. Change Steam ID");
+        console.log("5. Exit");
 
         const choice = await question('\nEnter choice (1-5): ');
 
@@ -156,7 +156,7 @@ async function main() {
                 currentID = newID.trim();
             }
         } else if (choice === '5') {
-            console.log("Bye! 👋");
+            console.log("Bye!");
             rl.close();
             process.exit(0);
         } else {

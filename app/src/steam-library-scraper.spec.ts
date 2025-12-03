@@ -14,8 +14,7 @@ test.use({ headless: false });
 const ACCOUNT_ID = process.env.STEAM_ACCOUNT_ID;
 
 if (!ACCOUNT_ID) {
-    console.error(`\n❌ ERROR: STEAM_ACCOUNT_ID was not provided.`);
-    throw new Error("CONFIGURATION ERROR: STEAM_ACCOUNT_ID is missing.");
+    console.error(`\nERROR: STEAM_ACCOUNT_ID was not provided.`);
 }
 
 const STEAM_PAGE = `https://steamcommunity.com/id/${ACCOUNT_ID}/games/?tab=all`;

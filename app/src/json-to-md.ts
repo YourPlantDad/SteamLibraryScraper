@@ -12,6 +12,7 @@ import * as https from 'https';
 const ROOT_DIR = path.resolve(__dirname, '..', '..');
 const INPUT_DIR = path.join(ROOT_DIR, 'output', 'raw_data');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'output', 'obsidian_library');
+const SETTINGS_PATH = path.join(ROOT_DIR, 'scraper-settings.json');
 const DELAY_MS = 1200; 
 
 // --- INTERFACES ---
@@ -25,13 +26,36 @@ interface GameData {
 }
 
 interface SteamStoreData {
+    name: string;
+    steam_appid: number;
     header_image?: string;
     short_description?: string;
+    detailed_description?: string;
     developers?: string[];
     publishers?: string[];
-    release_date?: { date: string };
-    metacritic?: { score: number };
-    genres?: { description: string }[];
+    release_date?: { 
+        coming_soon: boolean; 
+        date: string; 
+    };
+    metacritic?: { 
+        score: number; 
+        url?: string; 
+    };
+    categories?: { 
+        id: number; 
+        description: string; 
+    }[];
+    genres?: { 
+        id: string; 
+        description: string; 
+    }[];
+    platforms?: {
+        windows: boolean;
+        mac: boolean;
+        linux: boolean;
+    };
+    controller_support?: "full" | "partial" | "none";
+    required_age?: number | string;
 }
 
 // --- HELPERS ---
@@ -93,13 +117,97 @@ function formatDuration(ms: number): string {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+/**
+ * Renders a template string by evaluating expressions inside ${...}
+ * @param template The string containing ${jsCode}
+ * @param context An object containing variables available to the template
+ */
+function renderTemplate(template: string, context: any): string {
+    return template.replace(/\$\{([\s\S]+?)\}/g, (match, code) => {
+        try {
+            // Create a function that has access to the keys of the context object
+            const keys = Object.keys(context);
+            const values = Object.values(context);
+            
+            // "code" is the string inside the brackets, e.g., "game.name"
+            const func = new Function(...keys, `return ${code};`);
+            
+            // Execute the function with the values
+            const result = func(...values);
+            return result === undefined || result === null ? "" : String(result);
+        } catch (e) {
+            console.error(`\nTemplate Error evaluating: "${code}"`);
+            return match; // Return the raw ${...} string if it fails so user can debug
+        }
+    });
+}
+
+// --- DEFAULT TEMPLATE (Fallback) ---
+const DEFAULT_TEMPLATE = `---
+title: "[[${"game.name".replace(/"/g, '\\"')}]]"
+releaseDate: \${releaseDateStr}
+developers:
+\${storeData?.developers?.map(d => toWikiLink(d)).join('\\n') || ""}
+publishers:
+\${storeData?.publishers?.map(p => toWikiLink(p)).join('\\n') || ""}
+genres:
+\${storeData?.genres?.map(g => toWikiLink(g.description)).join('\\n') || ""}
+url: https://store.steampowered.com/app/\${game.steamAppID}
+released: \${isReleased}
+metacriticRating: \${storeData?.metacritic?.score || 0}
+played: \${playtime > 0}
+playtimeHours: \${playtime}
+achievementsTotal: \${game.totalAchievements}
+achievementsUnlocked: \${game.myAchievements}
+completionRate: \${completionRate}%
+personalRating: 0
+type: game
+platform: steam
+id: \${game.steamAppID}
+tags: 
+  - steamgame
+  - \${playtime > 0 ? (playtime > 2 ? "status/playing" : "status/backlog") : "status/wishlist"}
+image: \${storeData?.header_image || ""}
+---
+![Cover](\${storeData?.header_image || ""})
+
+> [!summary] Description
+> \${summary}
+
+# My Stats
+- **Status**: \${playtime > 0 ? (playtime > 2 ? "Playing" : "Backlog") : "Wishlist/Backlog"}
+- **Playtime**: \${formatDuration(playtime * 3600000)} (\${playtime} hours)
+- **Last Played**: \${game.lastPlayed ? new Date(Number(game.lastPlayed) * 1000).toLocaleDateString() : "Never"}
+- **Completion**: \${completionRate}% (\${game.myAchievements}/\${game.totalAchievements})
+
+# Links
+- [Steam Store](https://store.steampowered.com/app/\${game.steamAppID})
+- [ProtonDB (Linux/Deck Compatibility)](https://www.protondb.com/app/\${game.steamAppID})
+- [SteamDB](https://steamdb.info/app/\${game.steamAppID}/)
+`;
+
 // --- MAIN FUNCTION ---
 export async function runConversion() {
-    console.log("\n🔄 Starting JSON to Markdown Conversion...");
+    console.log("\nStarting JSON to Markdown Conversion...");
 
+    // 1. Load Settings
+    let template = DEFAULT_TEMPLATE;
+    if (fs.existsSync(SETTINGS_PATH)) {
+        try {
+            const settings = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
+            if (settings.markdownTemplate) {
+                console.log("Loaded custom Markdown template from settings.");
+                template = settings.markdownTemplate;
+            }
+        } catch (e) {
+            console.error("Could not read settings file. Using default template.");
+        }
+    }
+
+    // 2. Load Data
     const jsonPath = findLatestJsonFile(INPUT_DIR);
     if (!jsonPath) {
-        console.error(`❌ No JSON files found in ${INPUT_DIR}. Please run the scraper first.`);
+        console.error(`No JSON files found in ${INPUT_DIR}. Please run the scraper first.`);
         if (!fs.existsSync(INPUT_DIR)) fs.mkdirSync(INPUT_DIR, { recursive: true });
         return;
     }
@@ -114,7 +222,7 @@ export async function runConversion() {
 
     const totalEstimatedTime = games.length * DELAY_MS;
     console.log(`Found ${games.length} games.`);
-    console.log(`⚠️  Note: This will take about ${formatDuration(totalEstimatedTime)} to avoid hitting Steam rate limits.`);
+    console.log(`Note: This will take about ${formatDuration(totalEstimatedTime)} to avoid hitting Steam rate limits.`);
 
     let updateStep = 0;
     if (games.length >= 100) {
@@ -123,6 +231,7 @@ export async function runConversion() {
         updateStep = 10;
     }
 
+    // 3. Process Games
     for (const [index, game] of games.entries()) {
         const safeName = sanitizeFilename(game.name);
         const fileName = `${safeName}.md`;
@@ -131,7 +240,9 @@ export async function runConversion() {
         // Smart Skip Check
         if (fs.existsSync(filePath)) {
             const existingContent = fs.readFileSync(filePath, 'utf-8');
-            if (existingContent.includes('cover_url: "http')) {
+            // Basic check to see if we already enriched this file 
+            // (Assumes standard template uses cover_url or image property)
+            if (existingContent.includes('image: "http') || existingContent.includes('cover_url: "http')) {
                 process.stdout.write(`\r[${index + 1}/${games.length}] Skipping: ${game.name} (Already enriched)   `);
                 continue;
             }
@@ -144,43 +255,66 @@ export async function runConversion() {
             storeData = await fetchSteamDetails(game.steamAppID);
         }
 
+        // --- Data Prep for Template ---
         const playtime = game.playtime === false ? 0 : game.playtime;
-        const lastPlayed = game.lastPlayed === false ? "Never" : new Date((game.lastPlayed as number) * 1000).toISOString().split('T')[0];
         
         const completionRate = game.totalAchievements > 0 
             ? Math.round((game.myAchievements / game.totalAchievements) * 100) 
             : 0;
 
-        const image = storeData?.header_image || "";
-        const developers = storeData?.developers ? `\n  - ${storeData.developers.join('\n  - ')}` : "";
-        const genres = storeData?.genres ? `\n  - ${storeData.genres.map(g => g.description).join('\n  - ')}` : "";
-        const releaseDate = storeData?.release_date?.date || "";
-        
-        let description = storeData?.short_description || "";
-        description = description.replace(/"/g, '\\"');
+        // Date Logic
+        let releaseDateStr = "";
+        let isReleased = false;
+        if (storeData?.release_date) {
+            isReleased = !storeData.release_date.coming_soon;
+            const parsedDate = new Date(storeData.release_date.date);
+            if (!isNaN(parsedDate.getTime())) {
+                releaseDateStr = parsedDate.toISOString().split('T')[0];
+            } else {
+                releaseDateStr = storeData.release_date.date;
+            }
+        }
 
-        const fileContent = `---
-type: game
-name: "${game.name.replace(/"/g, '\\"')}"
-steamAppId: ${game.steamAppID}
-playtime_hours: ${playtime}
-last_played: ${lastPlayed}
-achievements_unlocked: ${game.myAchievements}
-achievements_total: ${game.totalAchievements}
-completion_rate: ${completionRate}%
-cover_url: "${image}"
-developers:${developers}
-genres:${genres}
-release_date: "${releaseDate}"
----
-![Cover](${image})
+        // Steam Features (Flattened List)
+        const steamFeatures = storeData?.categories?.map(c => c.description) || [];
+        if (storeData?.controller_support === "full") steamFeatures.push("Full Controller Support");
 
-${description}
-`;
+        // Description Cleanup
+        let summary = storeData?.short_description || "";
+        summary = summary
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/<br>/g, '\n')
+            .replace(/(<([^>]+)>)/gi, "");
+
+        // Template Helpers
+        const toWikiLink = (val: string) => `  - "[[${val.replace(/"/g, '\\"')}]]"`;
+
+        // 4. Context Creation
+        const context = {
+            game,
+            storeData,
+            playtime,
+            completionRate,
+            releaseDateStr,
+            isReleased,
+            steamFeatures,
+            summary,
+            // Functions accessible in template
+            formatDuration,
+            toWikiLink,
+            // Common JS objects
+            Math,
+            Date
+        };
+
+        // 5. Generate Content
+        const fileContent = renderTemplate(template, context);
+
         fs.writeFileSync(filePath, fileContent);
         
-        if (storeData) console.log("✅ Enriched");
-        else console.log("⚪ Basic Info Only");
+        if (storeData) console.log("Enriched");
+        else console.log("Basic Info Only");
 
         if (updateStep > 0 && (index + 1) % updateStep === 0 && index + 1 !== games.length) {
             const gamesRemaining = games.length - (index + 1);
@@ -193,7 +327,7 @@ ${description}
     }
 
     const absoluteFolderPath = path.resolve(OUTPUT_DIR);
-    console.log(`\n\n✅ Success! Files saved to:`);
+    console.log(`\n\nSuccess! Files saved to:`);
     console.log(absoluteFolderPath);
 }
 

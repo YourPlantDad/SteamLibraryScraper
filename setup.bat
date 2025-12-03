@@ -5,7 +5,6 @@ echo ==========================================
 echo      Steam Library Scraper Installer
 echo ==========================================
 echo.
-
 :: 1. Check for Node.js
 node -v >nul 2>&1
 if %errorlevel% neq 0 (
@@ -19,6 +18,7 @@ if %errorlevel% neq 0 (
         echo Launching Node.js installer...
         echo Please follow the installation steps.
         start /wait node_installer.msi
+    
         del node_installer.msi
         echo.
         echo [IMPORTANT] Please RESTART your computer to complete the installation.
@@ -36,7 +36,7 @@ if %errorlevel% neq 0 (
 
 :: 2. Verify Project Structure
 if not exist "app\package.json" (
-    echo [ERROR] Could not find the 'app' folder. 
+    echo [ERROR] Could not find the 'app' folder.
     echo Please make sure you downloaded all files correctly.
     pause
     exit /b
@@ -85,12 +85,11 @@ echo (Example: from steamcommunity.com/id/YourPlantDad, enter "YourPlantDad")
 echo.
 set /p STEAM_ID="Enter Steam ID: "
 
-:: Create scraper-settings.json with the user input
-(
-echo {
-echo   "steamAccountID": "%STEAM_ID%"
-echo }
-) > scraper-settings.json
+echo.
+echo Generating settings file...
+
+:: We use Node to write the JSON to avoid Batch escaping issues with the complex template
+node -e "const fs = require('fs'); const settings = { steamAccountID: '%STEAM_ID%', markdownTemplate: \`---\ntitle: \"[[\\\${game.name.replace(/\\\"/g, '\\\\\\\"')}]]\"\nreleaseDate: \\\${releaseDateStr}\ndevelopers:\n\\\${storeData?.developers?.map(d => toWikiLink(d)).join('\\\\n') || \"\"}\npublishers:\n\\\${storeData?.publishers?.map(p => toWikiLink(p)).join('\\\\n') || \"\"}\ngenres:\n\\\${storeData?.genres?.map(g => toWikiLink(g.description)).join('\\\\n') || \"\"}\nurl: https://store.steampowered.com/app/\\\${game.steamAppID}\nreleased: \\\${isReleased}\nmetacriticRating: \\\${storeData?.metacritic?.score || 0}\nplayed: \\\${playtime > 0}\nplaytimeHours: \\\${playtime}\nachievementsTotal: \\\${game.totalAchievements}\nachievementsUnlocked: \\\${game.myAchievements}\ncompletionRate: \\\${completionRate}%%\npersonalRating: 0\ntype: game\nplatform: steam\nid: \\\${game.steamAppID}\ntags: \n  - steamgame\n  - \\\${playtime > 0 ? (playtime > 2 ? \"status/playing\" : \"status/backlog\") : \"status/wishlist\"}\nimage: \\\${storeData?.header_image || \"\"}\n---\n![Cover](\\\${storeData?.header_image || \"\"})\n\n> [!summary] Description\n> \\\${summary}\n\n## 📊 My Stats\n- **Status**: \\\${playtime > 0 ? (playtime > 2 ? \"Playing\" : \"Backlog\") : \"Wishlist/Backlog\"}\n- **Playtime**: \\\${formatDuration(playtime * 3600000)} (\\\${playtime} hours)\n- **Last Played**: \\\${game.lastPlayed ? new Date(Number(game.lastPlayed) * 1000).toLocaleDateString() : \"Never\"}\n- **Completion**: \\\${completionRate}%% (\\\${game.myAchievements}/\\\${game.totalAchievements})\n\n## 🔗 Links\n- [Steam Store](https://store.steampowered.com/app/\\\${game.steamAppID})\n- [ProtonDB (Linux/Deck Compatibility)](https://www.protondb.com/app/\\\${game.steamAppID})\n- [SteamDB](https://steamdb.info/app/\\\${game.steamAppID}/)\` }; fs.writeFileSync('scraper-settings.json', JSON.stringify(settings, null, 2));"
 
 echo.
 echo ==========================================
